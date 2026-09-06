@@ -21,7 +21,42 @@ def health_check():
     return jsonify({"status": "online", "mode": "headless_api"}), 200
 
 # -------------------------------------------------------------
-# 2. FIXED MOBILE CLIENT API ENDPOINTS
+# 2. USER AUTHENTICATION & REGISTRATION
+# -------------------------------------------------------------
+
+@app.route("/v1/users/validate-username/<username>", methods=["GET"])
+def validate_username(username):
+    """Validates if chosen username is available during registration"""
+    return jsonify({
+        "valid": True,
+        "available": True,
+        "username": username
+    }), 200
+
+@app.route("/v1/users", methods=["POST"])
+def register_user():
+    """Handles full account sign-up requests"""
+    user_id = str(uuid.uuid4())
+    data = request.get_json(silent=True) or {}
+    username = data.get("username", f"Player_{uuid.uuid4().hex[:4]}")
+    
+    return jsonify({
+        "user_id": user_id,
+        "username": username,
+        "token": f"token_{uuid.uuid4().hex}"
+    }), 201
+
+@app.route("/v1/users/guest-login", methods=["POST"])
+def guest_login():
+    """Handles guest access requests"""
+    return jsonify({
+        "user_id": str(uuid.uuid4()),
+        "username": f"Guest_{uuid.uuid4().hex[:4]}",
+        "token": "session_token_xyz_123"
+    }), 200
+
+# -------------------------------------------------------------
+# 3. APP CONFIGURATION & GAME CONTENT
 # -------------------------------------------------------------
 
 @app.route("/v1/config", methods=["GET"])
@@ -33,17 +68,9 @@ def app_config():
         }
     }), 200
 
-@app.route("/v1/users/guest-login", methods=["POST"])
-def guest_login():
-    return jsonify({
-        "user_id": str(uuid.uuid4()),
-        "username": f"Player_{uuid.uuid4().hex[:4]}",
-        "token": "session_token_xyz_123"
-    }), 200
-
 @app.route("/v1/computer/bot-personalities", methods=["GET"])
 def bot_personalities():
-    # Returns a direct array [...] instead of an object {...}
+    """Returns playable bot personalities as a direct JSON list"""
     return jsonify([
         {
             "id": "bot_easy",
@@ -69,7 +96,6 @@ def daily_puzzle():
 
 @app.route("/v1/tactics-batch", methods=["GET"])
 def tactics_batch():
-    # Returns a direct array [...] instead of {"tactics": []}
     return jsonify([]), 200
 
 @app.route("/v1/tv/show", methods=["GET"])
@@ -77,16 +103,12 @@ def tactics_batch():
 def watch_tv():
     return jsonify([]), 200
 
-@app.route("/v1/mastery-lessons/courses", methods=["GET"])
-@app.route("/v1/mastery-lessons/levels", methods=["GET"])
-@app.route("/v1/mastery-lessons/categories", methods=["GET"])
-@app.route("/v1/mastery-lessons/course-authors", methods=["GET"])
-def mastery_lessons_arrays():
-    # Lessons endpoints expect lists
+@app.route("/v1/mastery-lessons/<path:subpath>", methods=["GET"])
+def mastery_lessons(subpath):
     return jsonify([]), 200
 
 # -------------------------------------------------------------
-# 3. COMETD EMULATION ROUTE
+# 4. COMETD EMULATION ROUTE
 # -------------------------------------------------------------
 
 @app.route("/cometd", methods=["POST"])
@@ -116,7 +138,7 @@ def cometd_handshake():
     return jsonify(response)
 
 # -------------------------------------------------------------
-# 4. WEBSOCKET ENGINE
+# 5. WEBSOCKET ENGINE (Game Moves & Sync)
 # -------------------------------------------------------------
 
 @sock.route("/ws/live/<game_id>")
@@ -142,6 +164,19 @@ def live_websocket(ws, game_id):
                     ws.send(json.dumps({"event": "error", "message": "Illegal move"}))
         except Exception as err:
             ws.send(json.dumps({"event": "error", "message": str(err)}))
+
+# -------------------------------------------------------------
+# 6. CATCH-ALL ROUTE (Prevents Unexpected 404 Errors)
+# -------------------------------------------------------------
+
+@app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
+def catch_all(path):
+    """Fallback handler returning empty JSON to avoid client-side crashing on unknown endpoints"""
+    return jsonify({}), 200
+
+# -------------------------------------------------------------
+# RUNNER
+# -------------------------------------------------------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
