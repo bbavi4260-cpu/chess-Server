@@ -1,6 +1,8 @@
 import os
 import json
 import uuid
+import random
+import time
 import chess
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -11,6 +13,16 @@ CORS(app)
 sock = Sock(app)
 
 GAMES = {}
+
+# Mock Pool of Fake Online Opponents
+FAKE_PLAYERS = [
+    {"username": "GrandmasterFlex", "rating": 1540, "country": "US"},
+    {"username": "KnightRider99", "rating": 1210, "country": "IN"},
+    {"username": "RookAndRoll", "rating": 1380, "country": "DE"},
+    {"username": "PawnStar_2026", "rating": 1100, "country": "BR"},
+    {"username": "CheckmatePro", "rating": 1650, "country": "FR"},
+    {"username": "TacticalGenius", "rating": 1420, "country": "CA"}
+]
 
 # -------------------------------------------------------------
 # 1. ROOT & HEALTH CHECK
@@ -26,7 +38,6 @@ def health_check():
 
 @app.route("/v1/users/validate-username/<username>", methods=["GET"])
 def validate_username(username):
-    """Validates username availability for signup screen"""
     return jsonify({
         "valid": True,
         "available": True,
@@ -37,7 +48,6 @@ def validate_username(username):
 
 @app.route("/v1/users", methods=["POST"])
 def register_user():
-    """Handles full registration / Continue button press"""
     data = request.get_json(silent=True) or {}
     username = data.get("username", f"Player_{uuid.uuid4().hex[:4]}")
     user_id = str(uuid.uuid4())
@@ -61,7 +71,6 @@ def register_user():
 
 @app.route("/v1/users/guest-login", methods=["POST"])
 def guest_login():
-    """Handles guest access requests"""
     user_id = str(uuid.uuid4())
     username = f"Guest_{uuid.uuid4().hex[:4]}"
     token = "session_token_xyz_123"
@@ -81,7 +90,39 @@ def guest_login():
     }), 200
 
 # -------------------------------------------------------------
-# 3. APP CONFIGURATION & GAME CONTENT
+# 3. PLAY ONLINE (FAKE MATCHMAKING)
+# -------------------------------------------------------------
+
+@app.route("/v1/matchmaking/find", methods=["POST", "GET"])
+@app.route("/v1/game/quickpair", methods=["POST", "GET"])
+def find_match():
+    """Generates an immediate pairing with a fake online opponent"""
+    game_id = str(uuid.uuid4())[:8]
+    opponent = random.choice(FAKE_PLAYERS)
+    
+    GAMES[game_id] = {
+        "board": chess.Board(),
+        "opponent": opponent,
+        "created_at": time.time()
+    }
+
+    return jsonify({
+        "code": 0,
+        "game_id": game_id,
+        "status": "matched",
+        "opponent": {
+            "id": str(uuid.uuid4()),
+            "username": opponent["username"],
+            "rating": opponent["rating"],
+            "country": opponent["country"],
+            "avatar": ""
+        },
+        "color": random.choice(["white", "black"]),
+        "time_control": "10+0"
+    }), 200
+
+# -------------------------------------------------------------
+# 4. APP CONFIGURATION & GAME CONTENT
 # -------------------------------------------------------------
 
 @app.route("/v1/config", methods=["GET"])
@@ -95,7 +136,6 @@ def app_config():
 
 @app.route("/v1/computer/bot-personalities", methods=["GET"])
 def bot_personalities():
-    """Returns playable bot personalities as a direct JSON list"""
     return jsonify([
         {
             "id": "bot_easy",
@@ -133,7 +173,7 @@ def mastery_lessons(subpath):
     return jsonify([]), 200
 
 # -------------------------------------------------------------
-# 4. COMETD EMULATION ROUTE
+# 5. COMETD EMULATION ROUTE
 # -------------------------------------------------------------
 
 @app.route("/cometd", methods=["POST"])
@@ -163,7 +203,7 @@ def cometd_handshake():
     return jsonify(response)
 
 # -------------------------------------------------------------
-# 5. WEBSOCKET ENGINE (Game Moves & Sync)
+# 6. WEBSOCKET ENGINE (Game Moves & Sync)
 # -------------------------------------------------------------
 
 @sock.route("/ws/live/<game_id>")
@@ -191,12 +231,11 @@ def live_websocket(ws, game_id):
             ws.send(json.dumps({"event": "error", "message": str(err)}))
 
 # -------------------------------------------------------------
-# 6. CATCH-ALL ROUTE (Prevents Unexpected 404 Errors)
+# 7. CATCH-ALL ROUTE
 # -------------------------------------------------------------
 
 @app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def catch_all(path):
-    """Fallback handler returning empty JSON to avoid client crashes"""
     return jsonify({}), 200
 
 # -------------------------------------------------------------
