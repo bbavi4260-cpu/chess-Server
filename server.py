@@ -21,55 +21,76 @@ def health_check():
     return jsonify({"status": "online", "mode": "headless_api"}), 200
 
 # -------------------------------------------------------------
-# 2. MOBILE CLIENT API ENDPOINTS (Handling App Traffic)
+# 2. MOBILE CLIENT API ENDPOINTS (Wrapped in "data")
 # -------------------------------------------------------------
 
 @app.route("/v1/config", methods=["GET"])
 def app_config():
     return jsonify({
-        "status": "ok",
-        "endpoints": {
-            "websocket": f"wss://{request.host}/ws/live"
+        "data": {
+            "status": "ok",
+            "endpoints": {
+                "websocket": f"wss://{request.host}/ws/live"
+            }
         }
     }), 200
 
 @app.route("/v1/users/guest-login", methods=["POST"])
 def guest_login():
     return jsonify({
-        "user_id": str(uuid.uuid4()),
-        "username": f"Player_{uuid.uuid4().hex[:4]}",
-        "token": "session_token_xyz_123"
+        "data": {
+            "user_id": str(uuid.uuid4()),
+            "username": f"Player_{uuid.uuid4().hex[:4]}",
+            "token": "session_token_xyz_123"
+        }
     }), 200
 
 @app.route("/v1/computer/bot-personalities", methods=["GET"])
 def bot_personalities():
     return jsonify({
-        "bots": [
-            {"id": "bot_easy", "name": "Novice Bot", "rating": 400},
-            {"id": "bot_medium", "name": "Intermediate Bot", "rating": 1200}
-        ]
+        "data": {
+            "bots": [
+                {"id": "bot_easy", "name": "Novice Bot", "rating": 400},
+                {"id": "bot_medium", "name": "Intermediate Bot", "rating": 1200}
+            ]
+        }
     }), 200
 
 @app.route("/v1/puzzles/daily/today", methods=["GET"])
 def daily_puzzle():
     return jsonify({
-        "id": "daily_puzzle_01",
-        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
-        "rating": 1000
+        "data": {
+            "id": "daily_puzzle_01",
+            "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+            "rating": 1000
+        }
     }), 200
 
 @app.route("/v1/tactics-batch", methods=["GET"])
 def tactics_batch():
-    return jsonify({"tactics": []}), 200
+    return jsonify({
+        "data": {
+            "tactics": []
+        }
+    }), 200
 
 @app.route("/v1/tv/show", methods=["GET"])
 @app.route("/v1/watch", methods=["GET"])
 def watch_tv():
-    return jsonify({"live_games": []}), 200
+    return jsonify({
+        "data": {
+            "live_games": []
+        }
+    }), 200
 
 @app.route("/v1/mastery-lessons/<path:subpath>", methods=["GET"])
 def mastery_lessons(subpath):
-    return jsonify({"courses": [], "levels": []}), 200
+    return jsonify({
+        "data": {
+            "courses": [],
+            "levels": []
+        }
+    }), 200
 
 # -------------------------------------------------------------
 # 3. COMETD EMULATION ROUTE
