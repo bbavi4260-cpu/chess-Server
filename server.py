@@ -21,76 +21,69 @@ def health_check():
     return jsonify({"status": "online", "mode": "headless_api"}), 200
 
 # -------------------------------------------------------------
-# 2. MOBILE CLIENT API ENDPOINTS (Wrapped in "data")
+# 2. FIXED MOBILE CLIENT API ENDPOINTS
 # -------------------------------------------------------------
 
 @app.route("/v1/config", methods=["GET"])
 def app_config():
     return jsonify({
-        "data": {
-            "status": "ok",
-            "endpoints": {
-                "websocket": f"wss://{request.host}/ws/live"
-            }
+        "status": "ok",
+        "endpoints": {
+            "websocket": f"wss://{request.host}/ws/live"
         }
     }), 200
 
 @app.route("/v1/users/guest-login", methods=["POST"])
 def guest_login():
     return jsonify({
-        "data": {
-            "user_id": str(uuid.uuid4()),
-            "username": f"Player_{uuid.uuid4().hex[:4]}",
-            "token": "session_token_xyz_123"
-        }
+        "user_id": str(uuid.uuid4()),
+        "username": f"Player_{uuid.uuid4().hex[:4]}",
+        "token": "session_token_xyz_123"
     }), 200
 
 @app.route("/v1/computer/bot-personalities", methods=["GET"])
 def bot_personalities():
-    return jsonify({
-        "data": {
-            "bots": [
-                {"id": "bot_easy", "name": "Novice Bot", "rating": 400},
-                {"id": "bot_medium", "name": "Intermediate Bot", "rating": 1200}
-            ]
+    # Returns a direct array [...] instead of an object {...}
+    return jsonify([
+        {
+            "id": "bot_easy",
+            "name": "Novice Bot",
+            "rating": 400,
+            "avatarUrl": ""
+        },
+        {
+            "id": "bot_medium",
+            "name": "Intermediate Bot",
+            "rating": 1200,
+            "avatarUrl": ""
         }
-    }), 200
+    ]), 200
 
 @app.route("/v1/puzzles/daily/today", methods=["GET"])
 def daily_puzzle():
     return jsonify({
-        "data": {
-            "id": "daily_puzzle_01",
-            "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
-            "rating": 1000
-        }
+        "id": "daily_puzzle_01",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+        "rating": 1000
     }), 200
 
 @app.route("/v1/tactics-batch", methods=["GET"])
 def tactics_batch():
-    return jsonify({
-        "data": {
-            "tactics": []
-        }
-    }), 200
+    # Returns a direct array [...] instead of {"tactics": []}
+    return jsonify([]), 200
 
 @app.route("/v1/tv/show", methods=["GET"])
 @app.route("/v1/watch", methods=["GET"])
 def watch_tv():
-    return jsonify({
-        "data": {
-            "live_games": []
-        }
-    }), 200
+    return jsonify([]), 200
 
-@app.route("/v1/mastery-lessons/<path:subpath>", methods=["GET"])
-def mastery_lessons(subpath):
-    return jsonify({
-        "data": {
-            "courses": [],
-            "levels": []
-        }
-    }), 200
+@app.route("/v1/mastery-lessons/courses", methods=["GET"])
+@app.route("/v1/mastery-lessons/levels", methods=["GET"])
+@app.route("/v1/mastery-lessons/categories", methods=["GET"])
+@app.route("/v1/mastery-lessons/course-authors", methods=["GET"])
+def mastery_lessons_arrays():
+    # Lessons endpoints expect lists
+    return jsonify([]), 200
 
 # -------------------------------------------------------------
 # 3. COMETD EMULATION ROUTE
@@ -123,7 +116,7 @@ def cometd_handshake():
     return jsonify(response)
 
 # -------------------------------------------------------------
-# 4. WEBSOCKET ENGINE (Game Moves & Sync)
+# 4. WEBSOCKET ENGINE
 # -------------------------------------------------------------
 
 @sock.route("/ws/live/<game_id>")
@@ -149,10 +142,6 @@ def live_websocket(ws, game_id):
                     ws.send(json.dumps({"event": "error", "message": "Illegal move"}))
         except Exception as err:
             ws.send(json.dumps({"event": "error", "message": str(err)}))
-
-# -------------------------------------------------------------
-# RUNNER
-# -------------------------------------------------------------
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
