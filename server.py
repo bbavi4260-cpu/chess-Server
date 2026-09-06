@@ -14,229 +14,168 @@ sock = Sock(app)
 
 GAMES = {}
 
-# Mock Pool of Fake Online Opponents
 FAKE_PLAYERS = [
     {"username": "GrandmasterFlex", "rating": 1540, "country": "US"},
     {"username": "KnightRider99", "rating": 1210, "country": "IN"},
     {"username": "RookAndRoll", "rating": 1380, "country": "DE"},
     {"username": "PawnStar_2026", "rating": 1100, "country": "BR"},
     {"username": "CheckmatePro", "rating": 1650, "country": "FR"},
-    {"username": "TacticalGenius", "rating": 1420, "country": "CA"},
 ]
-
 
 # -------------------------------------------------------------
 # 1. ROOT & HEALTH CHECK
 # -------------------------------------------------------------
 
-
 @app.route("/", methods=["GET", "HEAD"])
 def health_check():
     return jsonify({"status": "online", "mode": "headless_api"}), 200
 
-
 # -------------------------------------------------------------
-# 2. USER AUTHENTICATION & REGISTRATION
+# 2. USER AUTHENTICATION & REGISTRATION (Fixes Image 1 Error -1)
 # -------------------------------------------------------------
-
 
 @app.route("/v1/users/validate-username/<username>", methods=["GET"])
 def validate_username(username):
-    is_valid = len(username) >= 3
-    return (
-        jsonify(
-            {
-                "valid": is_valid,
-                "available": True,
-                "username": username,
-                "code": 0,
-                "message": (
-                    "Username available"
-                    if is_valid
-                    else "Username too short"
-                ),
-            }
-        ),
-        200,
-    )
-
+    return jsonify({
+        "valid": True,
+        "available": True,
+        "username": username,
+        "code": 0,
+        "message": "Username available"
+    }), 200
 
 @app.route("/v1/users", methods=["POST"])
 def register_user():
     data = request.get_json(silent=True) or {}
-    username = data.get("username", f"Player_{uuid.uuid4().hex[:4]}")
+    username = data.get("username", f"TEST133")
     user_id = str(uuid.uuid4())
     token = f"token_{uuid.uuid4().hex}"
 
-    return (
-        jsonify(
-            {
-                "code": 0,
-                "message": "Success",
-                "user_id": user_id,
-                "username": username,
-                "token": token,
-                "session_id": token,
-                "user": {
-                    "id": user_id,
-                    "username": username,
-                    "email": data.get("email", f"{username}@example.com"),
-                    "avatar": "",
-                    "is_premium": True,
-                },
-            }
-        ),
-        200,
-    )
-
+    # Complete response structure to satisfy Android client user parser
+    return jsonify({
+        "code": 0,
+        "status": "success",
+        "message": "Success",
+        "user_id": user_id,
+        "username": username,
+        "token": token,
+        "session_id": token,
+        "user": {
+            "id": user_id,
+            "username": username,
+            "uuid": user_id,
+            "email": data.get("email", f"{username}@example.com"),
+            "avatar": "",
+            "is_premium": True,
+            "enabled": True
+        }
+    }), 200
 
 @app.route("/v1/users/guest-login", methods=["POST"])
 def guest_login():
     user_id = str(uuid.uuid4())
     username = f"Guest_{uuid.uuid4().hex[:4]}"
     token = f"session_token_{uuid.uuid4().hex[:8]}"
-
-    return (
-        jsonify(
-            {
-                "code": 0,
-                "message": "Success",
-                "user_id": user_id,
-                "username": username,
-                "token": token,
-                "session_id": token,
-                "user": {"id": user_id, "username": username, "is_premium": True},
-            }
-        ),
-        200,
-    )
-
-
-# -------------------------------------------------------------
-# 3. PLAY ONLINE (FAKE MATCHMAKING)
-# -------------------------------------------------------------
-
-
-@app.route("/v1/matchmaking/find", methods=["POST", "GET"])
-@app.route("/v1/game/quickpair", methods=["POST", "GET"])
-def find_match():
-    """Generates an immediate pairing with a fake online opponent"""
-    game_id = str(uuid.uuid4())[:8]
-    opponent = random.choice(FAKE_PLAYERS)
-
-    GAMES[game_id] = {
-        "board": chess.Board(),
-        "opponent": opponent,
-        "created_at": time.time(),
-    }
-
-    return (
-        jsonify(
-            {
-                "code": 0,
-                "game_id": game_id,
-                "status": "matched",
-                "opponent": {
-                    "id": str(uuid.uuid4()),
-                    "username": opponent["username"],
-                    "rating": opponent["rating"],
-                    "country": opponent["country"],
-                    "avatar": "",
-                },
-                "color": random.choice(["white", "black"]),
-                "time_control": "10+0",
-            }
-        ),
-        200,
-    )
-
+    
+    return jsonify({
+        "code": 0,
+        "status": "success",
+        "message": "Success",
+        "user_id": user_id,
+        "username": username,
+        "token": token,
+        "session_id": token,
+        "user": {
+            "id": user_id,
+            "username": username,
+            "is_premium": True
+        }
+    }), 200
 
 # -------------------------------------------------------------
-# 4. APP CONFIGURATION & GAME CONTENT
+# 3. APP CONFIGURATION & HOME FEED (Fixes Image 3 BEGIN_ARRAY Error)
 # -------------------------------------------------------------
-
 
 @app.route("/v1/config", methods=["GET"])
 def app_config():
     scheme = "wss" if request.is_secure else "ws"
     ws_host = request.host
-    return (
-        jsonify(
-            {
-                "status": "ok",
-                "endpoints": {"websocket": f"{scheme}://{ws_host}/ws/live"},
-            }
-        ),
-        200,
-    )
+    # Return as list or expected format array wrapper if client queries root endpoint
+    return jsonify({
+        "status": "ok",
+        "endpoints": {
+            "websocket": f"{scheme}://{ws_host}/ws/live"
+        },
+        "features": []
+    }), 200
 
+@app.route("/v1/home", methods=["GET"])
+@app.route("/v1/feed", methods=["GET"])
+def home_feed():
+    # Android client expects a JSON Array [] for home content feeds
+    return jsonify([]), 200
 
 @app.route("/v1/computer/bot-personalities", methods=["GET"])
 def bot_personalities():
-    return (
-        jsonify(
-            [
-                {
-                    "id": "bot_easy",
-                    "name": "Novice Bot",
-                    "rating": 400,
-                    "avatarUrl": "",
-                },
-                {
-                    "id": "bot_medium",
-                    "name": "Intermediate Bot",
-                    "rating": 1200,
-                    "avatarUrl": "",
-                },
-                {
-                    "id": "bot_hard",
-                    "name": "Grandmaster Bot",
-                    "rating": 2200,
-                    "avatarUrl": "",
-                },
-            ]
-        ),
-        200,
-    )
-
+    return jsonify([
+        {"id": "bot_easy", "name": "Novice Bot", "rating": 400, "avatarUrl": ""},
+        {"id": "bot_medium", "name": "Intermediate Bot", "rating": 1200, "avatarUrl": ""},
+        {"id": "bot_hard", "name": "Grandmaster Bot", "rating": 2200, "avatarUrl": ""}
+    ]), 200
 
 @app.route("/v1/puzzles/daily/today", methods=["GET"])
 def daily_puzzle():
-    return (
-        jsonify(
-            {
-                "id": "daily_puzzle_01",
-                "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
-                "rating": 1000,
-            }
-        ),
-        200,
-    )
-
+    return jsonify({
+        "id": "daily_puzzle_01",
+        "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+        "rating": 1000
+    }), 200
 
 @app.route("/v1/tactics-batch", methods=["GET"])
-def tactics_batch():
-    return jsonify([]), 200
-
-
 @app.route("/v1/tv/show", methods=["GET"])
 @app.route("/v1/watch", methods=["GET"])
-def watch_tv():
+def array_endpoints():
     return jsonify([]), 200
-
 
 @app.route("/v1/mastery-lessons/<path:subpath>", methods=["GET"])
 def mastery_lessons(subpath):
     return jsonify([]), 200
 
-
 # -------------------------------------------------------------
-# 5. COMETD EMULATION ROUTE
+# 4. MATCHMAKING & COMETD EMULATION (Fixes Image 2 Searching Stuck)
 # -------------------------------------------------------------
 
+@app.route("/v1/matchmaking/find", methods=["POST", "GET"])
+@app.route("/v1/game/quickpair", methods=["POST", "GET"])
+def find_match():
+    game_id = str(uuid.uuid4())[:8]
+    opponent = random.choice(FAKE_PLAYERS)
+    
+    GAMES[game_id] = {
+        "board": chess.Board(),
+        "opponent": opponent,
+        "created_at": time.time()
+    }
+
+    return jsonify({
+        "code": 0,
+        "game_id": game_id,
+        "status": "matched",
+        "opponent": {
+            "id": str(uuid.uuid4()),
+            "username": opponent["username"],
+            "rating": opponent["rating"],
+            "country": opponent["country"],
+            "avatar": ""
+        },
+        "color": random.choice(["white", "black"]),
+        "time_control": "10+0"
+    }), 200
 
 @app.route("/cometd", methods=["POST"])
-def cometd_handshake():
+@app.route("/cometd/", methods=["POST"])
+@app.route("/cometd/handshake", methods=["POST"])
+def cometd_engine():
     data = request.get_json(silent=True) or []
     if isinstance(data, dict):
         data = [data]
@@ -245,33 +184,56 @@ def cometd_handshake():
     for msg in data:
         channel = msg.get("channel")
         msg_id = msg.get("id", "1")
+        client_id = f"client_{uuid.uuid4().hex[:6]}"
 
         if channel == "/meta/handshake":
-            response.append(
-                {
-                    "id": msg_id,
-                    "channel": "/meta/handshake",
-                    "successful": True,
-                    "clientId": f"client_{uuid.uuid4().hex[:6]}",
-                    "supportedConnectionTypes": ["websocket", "long-polling"],
+            response.append({
+                "id": msg_id,
+                "channel": "/meta/handshake",
+                "successful": True,
+                "clientId": client_id,
+                "supportedConnectionTypes": ["websocket", "long-polling"],
+                "version": "1.0"
+            })
+        elif channel == "/meta/connect":
+            game_id = str(uuid.uuid4())[:8]
+            opponent = random.choice(FAKE_PLAYERS)
+            response.append({
+                "id": msg_id,
+                "channel": "/meta/connect",
+                "successful": True,
+                "advice": {"reconnect": "retry", "interval": 0},
+                "data": {
+                    "event": "game_start",
+                    "game_id": game_id,
+                    "opponent": opponent["username"]
                 }
-            )
-        elif channel in ["/meta/connect", "/meta/subscribe"]:
-            response.append({"id": msg_id, "channel": channel, "successful": True})
+            })
+        elif channel in ["/meta/subscribe", "/meta/unsubscribe"]:
+            response.append({
+                "id": msg_id,
+                "channel": channel,
+                "successful": True
+            })
+        else:
+            response.append({
+                "id": msg_id,
+                "channel": channel,
+                "successful": True,
+                "data": {}
+            })
 
     return jsonify(response)
 
-
 # -------------------------------------------------------------
-# 6. WEBSOCKET ENGINE (Game Moves & Sync)
+# 5. WEBSOCKET ENGINE
 # -------------------------------------------------------------
-
 
 @sock.route("/ws/live/<game_id>")
 def live_websocket(ws, game_id):
     if game_id not in GAMES:
         GAMES[game_id] = {"board": chess.Board()}
-
+    
     board = GAMES[game_id]["board"]
     ws.send(json.dumps({"event": "connected", "fen": board.fen()}))
 
@@ -283,39 +245,23 @@ def live_websocket(ws, game_id):
             payload = json.loads(raw_msg)
             if payload.get("action") == "move":
                 move_uci = payload.get("move")
-                if not move_uci:
-                    ws.send(
-                        json.dumps({"event": "error", "message": "Missing move"})
-                    )
-                    continue
-
-                move = chess.Move.from_uci(move_uci)
-                if move in board.legal_moves:
-                    board.push(move)
-                    ws.send(
-                        json.dumps({"event": "move_played", "fen": board.fen()})
-                    )
-                else:
-                    ws.send(
-                        json.dumps({"event": "error", "message": "Illegal move"})
-                    )
+                if move_uci:
+                    move = chess.Move.from_uci(move_uci)
+                    if move in board.legal_moves:
+                        board.push(move)
+                        ws.send(json.dumps({"event": "move_played", "fen": board.fen()}))
+                    else:
+                        ws.send(json.dumps({"event": "error", "message": "Illegal move"}))
         except Exception as err:
             ws.send(json.dumps({"event": "error", "message": str(err)}))
 
-
 # -------------------------------------------------------------
-# 7. CATCH-ALL ROUTE
+# 6. CATCH-ALL ROUTE
 # -------------------------------------------------------------
-
 
 @app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def catch_all(path):
-    return jsonify({}), 200
-
-
-# -------------------------------------------------------------
-# RUNNER
-# -------------------------------------------------------------
+    return jsonify([]), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
