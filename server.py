@@ -26,33 +26,58 @@ def health_check():
 
 @app.route("/v1/users/validate-username/<username>", methods=["GET"])
 def validate_username(username):
-    """Validates if chosen username is available during registration"""
+    """Validates username availability for signup screen"""
     return jsonify({
         "valid": True,
         "available": True,
-        "username": username
+        "username": username,
+        "code": 0,
+        "message": "Username available"
     }), 200
 
 @app.route("/v1/users", methods=["POST"])
 def register_user():
-    """Handles full account sign-up requests"""
-    user_id = str(uuid.uuid4())
+    """Handles full registration / Continue button press"""
     data = request.get_json(silent=True) or {}
     username = data.get("username", f"Player_{uuid.uuid4().hex[:4]}")
-    
+    user_id = str(uuid.uuid4())
+    token = f"token_{uuid.uuid4().hex}"
+
     return jsonify({
+        "code": 0,
+        "message": "Success",
         "user_id": user_id,
         "username": username,
-        "token": f"token_{uuid.uuid4().hex}"
-    }), 201
+        "token": token,
+        "session_id": token,
+        "user": {
+            "id": user_id,
+            "username": username,
+            "email": data.get("email", f"{username}@example.com"),
+            "avatar": "",
+            "is_premium": True
+        }
+    }), 200
 
 @app.route("/v1/users/guest-login", methods=["POST"])
 def guest_login():
     """Handles guest access requests"""
+    user_id = str(uuid.uuid4())
+    username = f"Guest_{uuid.uuid4().hex[:4]}"
+    token = "session_token_xyz_123"
+    
     return jsonify({
-        "user_id": str(uuid.uuid4()),
-        "username": f"Guest_{uuid.uuid4().hex[:4]}",
-        "token": "session_token_xyz_123"
+        "code": 0,
+        "message": "Success",
+        "user_id": user_id,
+        "username": username,
+        "token": token,
+        "session_id": token,
+        "user": {
+            "id": user_id,
+            "username": username,
+            "is_premium": True
+        }
     }), 200
 
 # -------------------------------------------------------------
@@ -171,7 +196,7 @@ def live_websocket(ws, game_id):
 
 @app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def catch_all(path):
-    """Fallback handler returning empty JSON to avoid client-side crashing on unknown endpoints"""
+    """Fallback handler returning empty JSON to avoid client crashes"""
     return jsonify({}), 200
 
 # -------------------------------------------------------------
