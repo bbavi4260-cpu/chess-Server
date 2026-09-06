@@ -112,8 +112,16 @@ def app_config():
 @app.route("/v1/home", methods=["GET"])
 @app.route("/v1/feed", methods=["GET"])
 def home_feed():
-    # Android client expects a JSON Array [] for home content feeds
-    return jsonify([]), 200
+    # The mobile home/feed response is an object.  Returning [] here causes
+    # Gson/Moshi clients that deserialize a HomeResponse to fail with:
+    # "Expected BEGIN_OBJECT but was BEGIN_ARRAY at path $".
+    return jsonify({
+        "status": "ok",
+        "data": {
+            "sections": [],
+            "items": []
+        }
+    }), 200
 
 @app.route("/v1/computer/bot-personalities", methods=["GET"])
 def bot_personalities():
@@ -261,7 +269,14 @@ def live_websocket(ws, game_id):
 
 @app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def catch_all(path):
-    return jsonify([]), 200
+    # Never return an arbitrary array for an unknown endpoint.  The Android
+    # client may try to deserialize this response as an object, which turns a
+    # harmless 404 into a JSON parsing crash.
+    return jsonify({
+        "status": "error",
+        "code": "not_found",
+        "message": f"Endpoint not found: /{path}"
+    }), 404
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
