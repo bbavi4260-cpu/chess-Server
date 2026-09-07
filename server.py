@@ -100,6 +100,16 @@ def _auth_payload(user, token):
 
 def _create_user(data, guest=False):
     username = str(data.get("username") or data.get("userName") or "").strip()
+    
+    # Check if a session already exists for this client to prevent guest loop retries
+    token_header = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    token_header = token_header or request.headers.get("X-Session-Token", "").strip()
+    if token_header and token_header in SESSIONS:
+        existing_user_id = SESSIONS[token_header]
+        existing_user = next((u for u in USERS.values() if u["id"] == existing_user_id), None)
+        if existing_user:
+            return jsonify(_auth_payload(existing_user, token_header)), 200
+
     if guest:
         username = username or f"Guest_{uuid.uuid4().hex[:6]}"
     if not username:
@@ -244,7 +254,7 @@ def mastery_lessons(subpath):
     }), 200
 
 # -------------------------------------------------------------
-# 4. MATCHMAKING & COMETD EMULATION (FIXED)
+# 4. MATCHMAKING & COMETD EMULATION
 # -------------------------------------------------------------
 
 def create_fake_game():
@@ -421,7 +431,6 @@ def cometd_engine():
                 "data": {}
             })
 
-    # अगर क्लाइंट ने Single JSON Object `{}` भेजा है तो Single Object ही लौटाएं
     if is_single_object and len(response) > 0:
         return jsonify(response[0]), 200
 
