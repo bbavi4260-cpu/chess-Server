@@ -40,15 +40,13 @@ def health_check():
     return jsonify({"status": "online", "mode": "headless_api"}), 200
 
 # -------------------------------------------------------------
-# 2. USER AUTHENTICATION & REGISTRATION (Fixes Image 1 Error -1)
+# 2. USER AUTHENTICATION & REGISTRATION
 # -------------------------------------------------------------
 
 @app.route("/v1/users/validate-username/<username>", methods=["GET"])
 def validate_username(username):
     username = username.strip()
     valid = 3 <= len(username) <= 25 and username.replace("_", "").isalnum()
-    # Existing local users remain valid for a retried signup flow.  The APK
-    # may validate again after a successful request whose response was lost.
     available = valid
     payload = {
         "valid": valid,
@@ -108,9 +106,6 @@ def _create_user(data, guest=False):
         username = f"Player_{uuid.uuid4().hex[:6]}"
     key = username.lower()
     if key in USERS and not guest:
-        # Signup can be retried when the APK receives a response but fails to
-        # parse it.  Treat the retry as idempotent instead of returning
-        # "username already taken" and trapping the user on the signup page.
         user = USERS[key]
         token = f"session_{uuid.uuid4().hex}"
         SESSIONS[token] = user["id"]
@@ -142,7 +137,6 @@ def login_user():
     username = str(data.get("username") or data.get("userName") or "").strip().lower()
     user = USERS.get(username)
     if not user:
-        # This is a local test server: create a test account on first login.
         return _create_user(data)
     token = f"session_{uuid.uuid4().hex}"
     SESSIONS[token] = user["id"]
@@ -190,14 +184,13 @@ def user_profile(username):
                     "user": user, "data": {"user": user}}), 200
 
 # -------------------------------------------------------------
-# 3. APP CONFIGURATION & HOME FEED (Fixes Image 3 BEGIN_ARRAY Error)
+# 3. APP CONFIGURATION & HOME FEED
 # -------------------------------------------------------------
 
 @app.route("/v1/config", methods=["GET"])
 def app_config():
     scheme = "wss" if request.is_secure else "ws"
     ws_host = request.host
-    # Return as list or expected format array wrapper if client queries root endpoint
     return jsonify({
         "status": "ok",
         "endpoints": {
@@ -209,9 +202,6 @@ def app_config():
 @app.route("/v1/home", methods=["GET"])
 @app.route("/v1/feed", methods=["GET"])
 def home_feed():
-    # The mobile home/feed response is an object.  Returning [] here causes
-    # Gson/Moshi clients that deserialize a HomeResponse to fail with:
-    # "Expected BEGIN_OBJECT but was BEGIN_ARRAY at path $".
     return jsonify({
         "status": "ok",
         "data": {
@@ -222,8 +212,6 @@ def home_feed():
 
 @app.route("/v1/computer/bot-personalities", methods=["GET"])
 def bot_personalities():
-    # The home screen deserializes this endpoint as List<BotPersonality>.
-    # Do not wrap it in {"data": ...}; that causes BEGIN_ARRAY/BEGIN_OBJECT.
     return jsonify([
         {"id": "bot_easy", "name": "Novice Bot", "rating": 400, "avatarUrl": ""},
         {"id": "bot_medium", "name": "Intermediate Bot", "rating": 1200, "avatarUrl": ""},
@@ -256,11 +244,10 @@ def mastery_lessons(subpath):
     }), 200
 
 # -------------------------------------------------------------
-# 4. MATCHMAKING & COMETD EMULATION (Fixes Image 2 Searching Stuck)
+# 4. MATCHMAKING & COMETD EMULATION (FIXED)
 # -------------------------------------------------------------
 
 def create_fake_game():
-    """Create an immediately matched local test game for the mobile client."""
     game_id = str(uuid.uuid4())[:8]
     opponent = random.choice(ONLINE_PLAYERS)
     player_color = random.choice(["white", "black"])
@@ -279,7 +266,6 @@ def create_fake_game():
 @app.route("/v1/users/online", methods=["GET"])
 @app.route("/v1/presence", methods=["GET"])
 def online_players():
-    """Return deterministic fake presence for clients that load online users."""
     return jsonify({
         "status": "ok",
         "data": {"players": ONLINE_PLAYERS, "count": len(ONLINE_PLAYERS)},
@@ -380,13 +366,17 @@ def play_move(game_id):
 def cancel_matchmaking():
     return jsonify({"code": 0, "status": "cancelled", "success": True}), 200
 
+
 @app.route("/cometd", methods=["POST"])
 @app.route("/cometd/", methods=["POST"])
 @app.route("/cometd/handshake", methods=["POST"])
 def cometd_engine():
     data = request.get_json(silent=True) or []
+    is_single_object = False
+
     if isinstance(data, dict):
         data = [data]
+        is_single_object = True
 
     response = []
     for msg in data:
@@ -431,7 +421,11 @@ def cometd_engine():
                 "data": {}
             })
 
-    return jsonify(response)
+    # अगर क्लाइंट ने Single JSON Object `{}` भेजा है तो Single Object ही लौटाएं
+    if is_single_object and len(response) > 0:
+        return jsonify(response[0]), 200
+
+    return jsonify(response), 200
 
 # -------------------------------------------------------------
 # 5. WEBSOCKET ENGINE
@@ -469,9 +463,6 @@ def live_websocket(ws, game_id):
 
 @app.route("/<path:path>", methods=["GET", "POST", "PUT", "DELETE"])
 def catch_all(path):
-    # Never return an arbitrary array for an unknown endpoint.  The Android
-    # client may try to deserialize this response as an object, which turns a
-    # harmless 404 into a JSON parsing crash.
     return jsonify({
         "status": "error",
         "code": "not_found",
